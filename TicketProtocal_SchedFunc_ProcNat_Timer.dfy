@@ -374,8 +374,6 @@ predicate IsSchedule(sched: Schedule)
 {
     // forall t :: sched(t) in P 
     forall t :: sched(t) in P || sched(t) == pNull
-
-    
 }
 
 // clock
@@ -632,9 +630,9 @@ requires tr(n).pState.hasTicket[served] == tr(n).pState.serving
 requires n <= u
 requires sched(u) == served
 requires InvariantsInPeriodWithFrozenServedProcess(tr, sched, served, n, n)
-// ensures n <= k <= u
-// ensures sched(k) == served
-// ensures InvariantsInPeriodWithFrozenServedProcess(tr, sched, served, n, k)
+ensures n <= k <= u
+ensures sched(k) == served
+ensures InvariantsInPeriodWithFrozenServedProcess(tr, sched, served, n, k)
 {
     k := n;
     // assert InvariantsInPeriodWithFrozenServedProcess(tr, sched, served, n, k);
@@ -642,16 +640,14 @@ requires InvariantsInPeriodWithFrozenServedProcess(tr, sched, served, n, n)
     while sched(k) != served // k == u ==> sched(k) == sched(u) 
         invariant n <= k <= u
         invariant sched(u) == served
-        // invariant InvariantsInPeriodWithFrozenServedProcess(tr, sched, served, n, k);
+        invariant sched(k) != served ==> k < u
+        invariant InvariantsInPeriodWithFrozenServedProcess(tr, sched, served, n, k);
         decreases u - k
     {    
-        /*                   
-        assert InvariantsInPeriodWithFrozenServedProcess(tr, sched, served, n, k);
-        assert sched(k) != served;
-        ExtendPeriodWithFrozenServedProcess(tr, sched, served, n, k, k + 1);
-        assert InvariantsInPeriodWithFrozenServedProcess(tr, sched, served, n, k + 1);
-        */
-        k := k + 1;          
+        var t := k;
+        k := k + 1;
+        ExtendPeriodWithFrozenServedProcess(tr, sched, served, n, t, k);
+        assert k == u ==> sched(k) == sched(u);
     }
     
 }
@@ -844,10 +840,10 @@ requires tr(t).pState.hasTicket[p] == tr(t).pState.serving
 requires t' == t + 1
 ensures tr(t').pState.cs[p] == Critical
 ensures tr(t').pState.hasTicket[p] == tr(t').pState.serving 
+ensures tr(t').pState.serving == tr(t).pState.serving 
 ensures forall q :: (IsProcess(q) && tr(t).pState.cs[q] == Waiting && q != p) 
             ==> ( && tr(t').pState.cs[q] == Waiting 
-                  && tr(t').pState.hasTicket[q] == tr(t).pState.hasTicket[q] )
-                  
+                  && tr(t').pState.hasTicket[q] == tr(t).pState.hasTicket[q] )                  
 {
     assert tr(t).pState.cs[p] == Waiting ==> !LeaveP(tr(t), p, tr(t + 1));
     assert tr(t).pState.cs[p] == Waiting ==> !RequestP(tr(t), p, tr(t + 1));
@@ -861,31 +857,16 @@ requires IsFairSchedule(sched) && IsTrace(tr, sched) && IsProcess(p)
 requires tr(t).pState.cs[p] == Waiting
 requires tr(t).pState.hasTicket[p] == tr(t).pState.serving
 ensures t <= t'
-// ensures tr(t').pState.cs[p] == Critical 
+ensures tr(t').pState.cs[p] == Critical 
 ensures tr(t').pState.hasTicket[p] == tr(t').pState.serving 
-/*
-ensures tr(t).pState.serving == tr(t').pState.serving 
+ensures tr(t').pState.serving == tr(t).pState.serving 
 ensures forall q :: (IsProcess(q) && tr(t).pState.cs[q] == Waiting && q != p) 
             ==> ( && tr(t').pState.cs[q] == Waiting 
-                  && tr(t').pState.hasTicket[q] == tr(t).pState.hasTicket[q] )
-                  */
+                  && tr(t').pState.hasTicket[q] == tr(t).pState.hasTicket[q] )                  
 {    
-    var k := GetNextStepOfServedProcess(tr, sched, p, t);    
-    ServedProcessHasEnteredCriticalArea(tr, sched, p, k, k + 1);       
-    t' := k + 1;
-        
-        
-        // assert tr(t').pState.hasTicket[p] == tr(t').pState.serving;
-        // assert tr(t).pState.serving == tr(t').pState.serving;
-        // assert forall q :: (IsProcess(q) && tr(t).pState.cs[q] == Waiting && q != p) 
-        //            ==> ( && tr(t').pState.cs[q] == Waiting 
-        //                  && tr(t').pState.hasTicket[q] == tr(t).pState.hasTicket[q] );
-        // ServedProcessMustEntersCriticalArea(tr, sched, p, k);
-        
-        // assert EnterP(tr(k), sched(k), tr(k + 1));
-        // t' := k + 1;
-        
-        // t' := k;        
+    var k := GetNextStepOfServedProcess(tr, sched, p, t);  
+    t' := k + 1;  
+    ServedProcessHasEnteredCriticalArea(tr, sched, p, k, t');       
 }
 
 lemma ServedProcessEventuallyEntersCriticalArea(tr: Trace, sched: Schedule, 
@@ -894,65 +875,54 @@ requires IsFairSchedule(sched) && IsTrace(tr, sched) && IsProcess(p)
 requires tr(t).pState.cs[p] != Idle
 requires tr(t).pState.hasTicket[p] == tr(t).pState.serving
 ensures t <= t'
-// ensures sched(t') == p
 ensures tr(t').pState.cs[p] == Critical 
-/*
 ensures tr(t').pState.hasTicket[p] == tr(t').pState.serving 
-ensures tr(t).pState.serving == tr(t').pState.serving 
+ensures tr(t').pState.serving == tr(t).pState.serving 
 ensures forall q :: (IsProcess(q) && tr(t).pState.cs[q] == Waiting && q != p) 
             ==> ( && tr(t').pState.cs[q] == Waiting 
-                  && tr(t').pState.hasTicket[q] == tr(t).pState.hasTicket[q] )
-                  */
+                  && tr(t').pState.hasTicket[q] == tr(t).pState.hasTicket[q] ) 
 {    
     if tr(t).pState.cs[p] == Critical { 
         t' := t;        
     }
-    
-    if tr(t).pState.cs[p] == Waiting {        
-        var t' := GetNextStepOfServedProcess(tr, sched, p, t);
-        // assert sched(t') == p;
-        
-        
-        // assert tr(t').pState.hasTicket[p] == tr(t').pState.serving;
-        // assert tr(t).pState.serving == tr(t').pState.serving;
-        // assert forall q :: (IsProcess(q) && tr(t).pState.cs[q] == Waiting && q != p) 
-        //            ==> ( && tr(t').pState.cs[q] == Waiting 
-        //                  && tr(t').pState.hasTicket[q] == tr(t).pState.hasTicket[q] );
-        // ServedProcessMustEntersCriticalArea(tr, sched, p, k);
-        
-        // assert EnterP(tr(k), sched(k), tr(k + 1));
-        // t' := k + 1;
-        
-        // t' := k;
+    else {
+        assert tr(t).pState.cs[p] == Waiting;
+        var k := GetNextStepOfServedProcess(tr, sched, p, t);
+        t' := k + 1;
+        ServedProcessHasEnteredCriticalArea(tr, sched, p, k, t');
     }
-    
 }
 
+lemma ServedProcessHasLeavedCriticalArea(tr: Trace, sched: Schedule, p: Process, 
+            t: nat, t': nat)
+requires IsFairSchedule(sched) && IsTrace(tr, sched) && IsProcess(p)
+requires tr(t).pState.cs[p] == Critical && tr(t).pState.hasTicket[p] == tr(t).pState.serving 
+requires sched(t) == p
+requires tr(t).pState.cs[p] == Critical
+requires t' == t + 1
+ensures LeaveP(tr(t), p, tr(t'))
+ensures !RequestP(tr(t), p, tr(t'))
+ensures !EnterP(tr(t), p, tr(t'))
+ensures !WaitP(tr(t), p, tr(t'))
+ensures tr(t').pState.serving == tr(t).pState.serving + 1
+ensures forall q :: IsProcess(q) && tr(t).pState.cs[q] == Waiting ==> tr(t').pState.cs[q] == Waiting && tr(t').pState.hasTicket[q] == tr(t).pState.hasTicket[q]
+ensures tr(t').pState.hasTicket[p] == 0 && tr(t').pState.cs[p] == Idle
+{
+    assert tr(t).pState.cs[p] == Critical;
+}
 
-lemma EventuallyLeavesTheCriticalAreaAfterFinishingAllTasks(tr: Trace, sched: Schedule, p: Process, t: nat) returns (t': nat)
+lemma EventuallyLeavesTheCriticalAreaAfterFinishingAllTasks(tr: Trace, sched: Schedule, 
+            p: Process, t: nat)  returns (t': nat)
 requires IsFairSchedule(sched) && IsTrace(tr, sched) && IsProcess(p)
 requires tr(t).pState.cs[p] == Critical && tr(t).pState.hasTicket[p] == tr(t).pState.serving 
 ensures t <= t' 
 ensures tr(t').pState.serving == tr(t).pState.serving + 1
 ensures forall q :: IsProcess(q) && tr(t).pState.cs[q] == Waiting ==> tr(t').pState.cs[q] == Waiting && tr(t').pState.hasTicket[q] == tr(t).pState.hasTicket[q]
 ensures tr(t').pState.hasTicket[p] == 0 && tr(t').pState.cs[p] == Idle
-{
-    assert Valid(tr(t));
-    var k := GetNextStepOfServedProcess(tr, sched, p, t);    
-    assert t <= k;
-    assert tr(t).pState.cs[p] == tr(t).pState.cs[p] == Critical;
-    
-    assert !RequestP(tr(k), p, tr(k + 1));
-    assert !EnterP(tr(k), p, tr(k + 1));    
-    assert !WaitP(tr(k), p, tr(k + 1));   
-    assert NextP(tr(k), p, tr(k + 1));
-    assert LeaveP(tr(k), p, tr(k + 1));
-        
-    assert tr(k + 1).pState.serving == tr(t).pState.serving + 1;
-    assert forall q :: IsProcess(q) && tr(t).pState.cs[q] == Waiting ==> tr(k + 1).pState.cs[q] == Waiting && tr(k + 1).pState.hasTicket[q] == tr(t).pState.hasTicket[q];
-    assert tr(k + 1).pState.hasTicket[p] == 0 && tr(k + 1).pState.cs[p] == Idle;
-
+{    
+    var k := GetNextStepOfServedProcess(tr, sched, p, t);        
     t' := k + 1;    
+    ServedProcessHasLeavedCriticalArea(tr, sched, p, k, t');
 }
 
 lemma ServedProcessEventuallyLeavesCriticalArea(tr: Trace, sched: Schedule, p: Process, t: nat) returns (t': nat)
